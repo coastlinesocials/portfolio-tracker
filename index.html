@@ -1,0 +1,1671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Ledger — Securities Tracker</title>
+
+<!-- Home screen app behavior on iOS -->
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#0B0D10">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+  :root{
+    --ink:#0B0D10;
+    --surface:#14171C;
+    --surface-2:#1B1F26;
+    --line:#262B33;
+    --line-soft:#1E222A;
+    --text:#E8E6E0;
+    --muted:#8B909A;
+    --faint:#565C67;
+    --gold:#C9A24C;
+    --gold-dim:#7A6636;
+    --green:#4FAE7C;
+    --red:#C4574B;
+    --font-display:'Fraunces', serif;
+    --font-body:'Inter', sans-serif;
+    --font-mono:'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html, body{height:100%;}
+  body{
+    background:var(--ink);
+    color:var(--text);
+    font-family:var(--font-body);
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:280px;
+    padding-top:env(safe-area-inset-top);
+  }
+  ::selection{background:var(--gold-dim); color:var(--text);}
+
+  /* ---------- Login screen ---------- */
+  #loginScreen{
+    position:fixed; inset:0; z-index:500;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--ink); padding:24px;
+  }
+  .login-box{
+    width:100%; max-width:360px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:28px 24px;
+    text-align:center;
+  }
+  .login-eyebrow{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:0.14em;
+    text-transform:uppercase; color:var(--gold); margin-bottom:8px;
+  }
+  .login-title{font-family:var(--font-display); font-size:24px; font-weight:500; margin-bottom:22px;}
+  .login-box .field{text-align:left; margin-bottom:14px;}
+  .login-error{color:var(--red); font-size:12px; margin-bottom:12px; min-height:14px;}
+  .login-hint{color:var(--faint); font-size:11px; margin-top:16px; line-height:1.5; font-family:var(--font-mono);}
+
+  /* ---------- Header ---------- */
+  header{
+    padding:28px 20px 20px;
+    border-bottom:1px solid var(--line);
+    position:sticky; top:0; z-index:20;
+    background:rgba(11,13,16,0.92);
+    backdrop-filter:blur(10px);
+    display:flex; justify-content:space-between; align-items:flex-start;
+  }
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--gold);
+    margin-bottom:6px;
+  }
+  h1{
+    font-family:var(--font-display);
+    font-weight:500;
+    font-size:28px;
+    letter-spacing:-0.01em;
+  }
+  .header-sub{
+    color:var(--muted);
+    font-size:13px;
+    margin-top:4px;
+  }
+  .signout-btn{
+    background:none; border:1px solid var(--line); color:var(--faint);
+    font-family:var(--font-mono); font-size:11px; padding:6px 10px;
+    border-radius:6px; cursor:pointer; margin-top:4px;
+  }
+  .signout-btn:hover{color:var(--red); border-color:var(--red);}
+
+  .sync-dot{
+    display:inline-block; width:6px; height:6px; border-radius:50%;
+    background:var(--green); margin-right:6px;
+  }
+  .sync-dot.off{background:var(--red);}
+
+  /* ---------- Totals strip ---------- */
+  .totals{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:1px;
+    background:var(--line);
+    border:1px solid var(--line);
+    margin:20px;
+    border-radius:10px;
+    overflow:hidden;
+  }
+  .totals .cell{
+    background:var(--surface);
+    padding:14px 10px;
+    min-width:0;
+  }
+  .totals .label{
+    font-family:var(--font-mono);
+    font-size:9px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--faint);
+    margin-bottom:6px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .totals .num{
+    font-family:var(--font-mono);
+    font-size:clamp(12px, 4vw, 19px);
+    font-weight:600;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .pos{color:var(--green);}
+  .neg{color:var(--red);}
+
+  /* ---------- Section ---------- */
+  section{margin:32px 20px;}
+  .section-head{
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin-bottom:14px;
+    border-bottom:1px solid var(--line);
+    padding-bottom:10px;
+  }
+  .section-title{
+    font-family:var(--font-display);
+    font-size:19px;
+    font-weight:500;
+  }
+  .section-count{
+    font-family:var(--font-mono);
+    font-size:11px;
+    color:var(--faint);
+  }
+  .btn{
+    font-family:var(--font-body);
+    font-size:13px;
+    font-weight:600;
+    padding:9px 16px;
+    border-radius:7px;
+    border:1px solid var(--line);
+    background:var(--surface-2);
+    color:var(--text);
+    cursor:pointer;
+    transition:border-color 0.15s, background 0.15s;
+  }
+  .btn:hover{border-color:var(--gold-dim);}
+  .btn:focus-visible{outline:2px solid var(--gold); outline-offset:2px;}
+  .btn-primary{
+    background:var(--gold);
+    color:#1A1508;
+    border-color:var(--gold);
+  }
+  .btn-primary:hover{background:#D9B25E;}
+  .btn-ghost{
+    background:transparent;
+    border-color:transparent;
+    color:var(--muted);
+    padding:6px 10px;
+    font-size:12px;
+  }
+  .btn-ghost:hover{color:var(--red); border-color:var(--red);}
+  .sell-holding:hover{color:var(--gold) !important; border-color:var(--gold-dim) !important;}
+  .buymore-holding:hover{color:var(--green) !important; border-color:var(--green) !important;}
+  .btn-sm{padding:6px 12px; font-size:12px;}
+
+  /* ---------- Holding Card ---------- */
+  .card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:14px 16px;
+    margin-bottom:12px;
+    cursor:pointer;
+  }
+  .card-summary{
+    display:flex; align-items:center; gap:12px;
+  }
+  .avatar{
+    flex-shrink:0;
+    width:38px; height:38px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--font-display); font-weight:600; font-size:14px;
+    color:#0B0D10;
+  }
+  .avatar-sm{width:26px; height:26px; font-size:11px;}
+  .avatar-img{background:var(--surface-2) !important; object-fit:cover;}
+  .avatar-upload-wrap{
+    position:relative; display:inline-block; cursor:pointer; border-radius:50%;
+  }
+  .avatar-upload-wrap::after{
+    content:'+'; position:absolute; bottom:-2px; right:-2px;
+    width:14px; height:14px; border-radius:50%;
+    background:var(--gold); color:#1A1508;
+    font-size:11px; font-weight:700; line-height:14px; text-align:center;
+    border:2px solid var(--surface);
+  }
+  .card-summary-mid{flex:1; min-width:0;}
+  .card-summary-company{
+    font-family:var(--font-display); font-size:16px; font-weight:500;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .card-summary-sub{
+    font-family:var(--font-mono); font-size:11px; color:var(--faint);
+    margin-top:2px;
+  }
+  .card-summary-right{
+    text-align:right; flex-shrink:0;
+  }
+  .card-summary-right .amt{
+    font-family:var(--font-mono); font-size:14px; font-weight:600;
+  }
+  .chevron{
+    flex-shrink:0; color:var(--faint); font-size:12px;
+    transition:transform 0.2s; margin-left:2px;
+    width:16px; text-align:center;
+  }
+  .chevron.open{transform:rotate(90deg); color:var(--gold);}
+  .card-details{
+    margin-top:14px; padding-top:14px; border-top:1px solid var(--line-soft);
+    cursor:default;
+  }
+  .card-actions{display:flex; gap:4px; margin-bottom:2px;}
+  .card-actions{display:flex; gap:4px;}
+  .card-top{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    gap:12px; margin-bottom:12px;
+  }
+  .card-company{
+    font-family:var(--font-display);
+    font-size:18px;
+    font-weight:500;
+  }
+  .card-type{
+    display:inline-block;
+    font-family:var(--font-mono);
+    font-size:10px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--gold);
+    border:1px solid var(--gold-dim);
+    border-radius:4px;
+    padding:2px 7px;
+    margin-top:5px;
+  }
+  .metrics-row{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:10px;
+    margin-bottom:12px;
+  }
+  .metric .m-label{
+    font-family:var(--font-mono);
+    font-size:10px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--faint);
+    margin-bottom:3px;
+  }
+  .metric .m-val{
+    font-family:var(--font-mono);
+    font-size:15px;
+    font-weight:600;
+  }
+
+  .ladder-wrap{margin:12px 0 10px;}
+  .ladder-label{
+    font-family:var(--font-mono);
+    font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--faint); margin-bottom:6px;
+    display:flex; justify-content:space-between;
+  }
+  .ladder{
+    display:flex; gap:3px; height:8px; margin-bottom:8px;
+  }
+  .tick{
+    flex:1; border-radius:2px; background:var(--line-soft);
+    position:relative;
+  }
+  .tick.vested{background:var(--gold);}
+  .tranche-list{
+    display:flex; flex-wrap:wrap; gap:6px;
+  }
+  .tranche-chip{
+    font-family:var(--font-mono);
+    font-size:11px;
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-radius:5px;
+    padding:4px 8px;
+    color:var(--muted);
+  }
+  .tranche-chip.vested{color:var(--gold); border-color:var(--gold-dim);}
+
+  .card-foot{
+    display:flex; justify-content:space-between; flex-wrap:wrap;
+    gap:6px 16px;
+    font-size:12px; color:var(--muted);
+    border-top:1px solid var(--line-soft);
+    padding-top:10px; margin-top:2px;
+  }
+  .card-foot span b{color:var(--text); font-weight:500;}
+  .card-notes{
+    font-size:12px; color:var(--faint); font-style:italic;
+    margin-top:8px; line-height:1.4;
+  }
+
+  .sold-card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:14px 16px;
+    margin-bottom:10px;
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+  }
+  .sold-left b{font-family:var(--font-display); font-weight:500; font-size:15px;}
+  .sold-meta{font-family:var(--font-mono); font-size:11px; color:var(--muted); margin-top:3px;}
+  .sold-right{text-align:right;}
+  .sold-right .amt{font-family:var(--font-mono); font-size:15px; font-weight:600;}
+
+  .price-grid{display:grid; gap:8px;}
+  .price-row{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:8px; padding:10px 14px;
+  }
+  .price-row .pname{font-size:13px; font-weight:500; display:flex; align-items:center;}
+  .price-row .pval{
+    font-family:var(--font-mono); font-size:14px; font-weight:600;
+    display:flex; align-items:center; gap:6px;
+  }
+  .price-row input{
+    width:80px; text-align:right;
+    background:var(--surface-2); border:1px solid var(--line);
+    color:var(--text); font-family:var(--font-mono); font-size:13px;
+    border-radius:5px; padding:5px 8px;
+  }
+
+  .empty{
+    text-align:center; padding:36px 20px; color:var(--faint); font-size:13px;
+    border:1px dashed var(--line); border-radius:10px;
+  }
+  .empty b{color:var(--muted); display:block; font-family:var(--font-display); font-size:16px; font-weight:500; margin-bottom:4px;}
+
+  .overlay{
+    position:fixed; inset:0; background:rgba(6,7,9,0.72);
+    display:none; align-items:flex-end; justify-content:center;
+    z-index:100; backdrop-filter:blur(3px);
+  }
+  .overlay.open{display:flex;}
+  .modal{
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:16px 16px 0 0; width:100%; max-width:560px;
+    max-height:88vh; overflow-y:auto; padding:20px 20px 28px;
+    animation:slideUp 0.22s ease-out;
+  }
+  @media(min-width:600px){
+    .overlay{align-items:center;}
+    .modal{border-radius:14px; margin:20px;}
+  }
+  @keyframes slideUp{from{transform:translateY(24px); opacity:0;} to{transform:translateY(0); opacity:1;}}
+  .modal-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;}
+  .modal-title{font-family:var(--font-display); font-size:20px; font-weight:500;}
+  .close-x{background:none; border:none; color:var(--muted); font-size:22px; cursor:pointer; line-height:1; padding:4px;}
+  .field{margin-bottom:14px;}
+  .field label{
+    display:block; font-family:var(--font-mono); font-size:10px;
+    letter-spacing:0.08em; text-transform:uppercase; color:var(--faint); margin-bottom:6px;
+  }
+  .field input, .field select, .field textarea{
+    width:100%; background:var(--surface-2); border:1px solid var(--line);
+    color:var(--text); font-family:var(--font-body); font-size:14px;
+    border-radius:7px; padding:10px 12px;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{outline:none; border-color:var(--gold-dim);}
+  .field textarea{resize:vertical; min-height:60px;}
+  .field-row{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .tranche-editor{border:1px solid var(--line); border-radius:8px; padding:10px; margin-top:6px;}
+  .tranche-editor-row{display:grid; grid-template-columns:1fr 1fr auto; gap:8px; margin-bottom:8px; align-items:center;}
+  .tranche-editor-row input{font-size:13px; padding:8px 10px;}
+  .mini-x{background:none; border:none; color:var(--faint); font-size:18px; cursor:pointer; padding:4px 8px;}
+  .mini-x:hover{color:var(--red);}
+  .add-tranche-btn{
+    font-family:var(--font-mono); font-size:11px; color:var(--gold);
+    background:none; border:1px dashed var(--gold-dim); border-radius:6px; padding:7px; width:100%; cursor:pointer;
+  }
+  .modal-footer{display:flex; gap:10px; margin-top:20px;}
+  .modal-footer .btn{flex:1;}
+
+  .fab-row{
+    position:fixed; bottom:0; left:0; right:0;
+    padding:14px 16px calc(14px + env(safe-area-inset-bottom));
+    background:linear-gradient(to top, var(--ink) 60%, transparent);
+    display:flex; gap:8px; justify-content:center; z-index:30;
+  }
+  .fab-row .btn{flex:1; max-width:220px; text-align:center; white-space:nowrap; padding:9px 8px;}
+  @media (max-width:380px){
+    .fab-row .btn{font-size:12px; padding:9px 4px;}
+  }
+
+  .toast{
+    position:fixed; bottom:90px; left:50%; transform:translateX(-50%);
+    background:var(--surface-2); border:1px solid var(--gold-dim);
+    color:var(--text); font-size:12px; padding:9px 16px;
+    border-radius:20px; z-index:200; opacity:0; pointer-events:none;
+    transition:opacity 0.25s, transform 0.25s; font-family:var(--font-mono);
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(-6px);}
+
+  .search-wrap{margin-bottom:14px;}
+  .search-wrap input{
+    width:100%;
+    background:var(--surface); border:1px solid var(--line);
+    color:var(--text); font-family:var(--font-body); font-size:14px;
+    border-radius:8px; padding:10px 14px;
+  }
+  .search-wrap input:focus{outline:none; border-color:var(--gold-dim);}
+  .search-wrap input::placeholder{color:var(--faint);}
+
+  .expiry-flag{
+    display:inline-block;
+    font-family:var(--font-mono); font-size:10px; letter-spacing:0.05em;
+    padding:3px 8px; border-radius:5px; margin-left:8px;
+    vertical-align:middle;
+  }
+  .expiry-flag.soon{background:rgba(196,87,75,0.15); color:var(--red); border:1px solid rgba(196,87,75,0.4);}
+  .expiry-flag.upcoming{background:rgba(201,162,76,0.15); color:var(--gold); border:1px solid var(--gold-dim);}
+
+  .chart-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:10px;
+    padding:16px;
+  }
+  .chart-card svg{width:100%; height:140px; display:block;}
+  .chart-empty{color:var(--faint); font-size:12px; text-align:center; padding:20px;}
+  .chart-foot{display:flex; justify-content:space-between; margin-top:8px; font-family:var(--font-mono); font-size:10px; color:var(--faint);}
+
+  .footer-note{
+    text-align:center; color:var(--faint); font-size:11px;
+    margin:30px 20px 0; font-family:var(--font-mono);
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-eyebrow">Personal Ledger</div>
+    <div class="login-title">Sign in</div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="login-email" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="login-password" autocomplete="current-password">
+    </div>
+    <div class="login-error" id="loginError"></div>
+    <button class="btn btn-primary" id="loginBtn" style="width:100%;">Sign In</button>
+    <div class="login-hint">Set up once in your Firebase console → Authentication → Users. There's no public sign-up here on purpose.</div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<header>
+  <div>
+    <div class="eyebrow"><span class="sync-dot" id="syncDot"></span>Personal Ledger</div>
+    <h1>Securities Tracker</h1>
+    <div class="header-sub" id="asOfLine">Loading your portfolio…</div>
+  </div>
+  <button class="signout-btn" id="signOutBtn">Sign out</button>
+</header>
+
+<div class="totals" id="totalsStrip">
+  <div class="cell"><div class="label">Total Value</div><div class="num" id="totVal">—</div></div>
+  <div class="cell"><div class="label">Total Profit</div><div class="num" id="totProfit">—</div></div>
+  <div class="cell"><div class="label">Vested Value</div><div class="num" id="totAvail">—</div></div>
+</div>
+
+<section>
+  <div class="section-head">
+    <div class="section-title">Portfolio Value Over Time</div>
+    <span class="section-count">snapshots as you update prices</span>
+  </div>
+  <div class="chart-card" id="chartCard"></div>
+  <button class="btn btn-sm" id="logSnapshotBtn" style="margin-top:10px; width:100%;">+ Log Today's Value</button>
+</section>
+
+<section>
+  <div class="section-head">
+    <div class="section-title">Holdings</div>
+    <span class="section-count" id="holdingsCount"></span>
+  </div>
+  <div class="search-wrap">
+    <input type="text" id="holdingSearch" placeholder="Filter by company…">
+    <button class="btn btn-ghost btn-sm" id="expandAllBtn" style="margin-top:8px; padding:5px 10px;">Expand all</button>
+  </div>
+  <div id="holdingsList"></div>
+</section>
+
+<section>
+  <div class="section-head">
+    <div class="section-title">Transaction History</div>
+    <span class="section-count" id="soldCount"></span>
+  </div>
+  <div id="soldList"></div>
+</section>
+
+<section>
+  <div class="section-head">
+    <div class="section-title">Current Prices</div>
+    <span class="section-count">drives calculations above</span>
+  </div>
+  <div class="price-grid" id="priceList"></div>
+</section>
+
+<div class="footer-note">Synced to your account · same data on every device</div>
+
+<div class="fab-row">
+  <button class="btn btn-primary" id="addHoldingBtn">+ Add Holding</button>
+  <button class="btn" id="addSoldBtn">+ Log Transaction</button>
+</div>
+
+<!-- Holding Modal -->
+<div class="overlay" id="holdingOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="holdingModalTitle">Add Holding</div>
+      <button class="close-x" data-close="holdingOverlay">×</button>
+    </div>
+    <div class="field">
+      <label>Company</label>
+      <input type="text" id="f-company" placeholder="e.g. Apollo Silver">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Type</label>
+        <select id="f-type">
+          <option value="Options">Options</option>
+          <option value="RSU">RSUs</option>
+          <option value="Shares">Shares</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Amount (shares)</label>
+        <input type="number" id="f-amount" placeholder="10000">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field" id="priceFieldWrap">
+        <label id="priceFieldLabel">Strike / Option Price</label>
+        <input type="number" step="0.001" id="f-strike" placeholder="1.025">
+      </div>
+      <div class="field">
+        <label id="dateFieldLabel">Awarded Date</label>
+        <input type="date" id="f-awarded">
+      </div>
+    </div>
+    <div class="field">
+      <label id="awardedTextLabel">Awarded (if unknown / n/a)</label>
+      <input type="text" id="f-awarded-text" placeholder="e.g. Unknown">
+    </div>
+    <div class="field-row" id="expiryRow">
+      <div class="field">
+        <label>Expiry Date</label>
+        <input type="date" id="f-expiry">
+      </div>
+      <div class="field">
+        <label>Expiry (if unknown / n/a)</label>
+        <input type="text" id="f-expiry-text" placeholder="e.g. n/a or Unknown">
+      </div>
+    </div>
+    <div class="field" id="trancheFieldWrap">
+      <label>Vesting Tranches</label>
+      <div class="tranche-editor" id="trancheEditor"></div>
+      <button class="add-tranche-btn" id="addTrancheBtn">+ Add tranche</button>
+    </div>
+    <div class="field">
+      <label>Held At (broker / platform)</label>
+      <input type="text" id="f-heldat" placeholder="e.g. Wealthsimple, Questrade, Computershare, IBKR">
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="f-notes" placeholder="Consolidation history, grant origin, etc."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" data-close="holdingOverlay">Cancel</button>
+      <button class="btn btn-primary" id="saveHoldingBtn">Save Holding</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sold Modal -->
+<div class="overlay" id="soldOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="soldModalTitle">Log Transaction</div>
+      <button class="close-x" data-close="soldOverlay">×</button>
+    </div>
+    <div class="field">
+      <label>Name / Description</label>
+      <input type="text" id="s-name" placeholder="e.g. Apollo RSUs Vested">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Type</label>
+        <select id="s-type">
+          <option>Grant</option>
+          <option>Purchase</option>
+          <option>Buy</option>
+          <option>RSU Vest</option>
+          <option>Option Exercise</option>
+          <option>Sale</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="s-date">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Amount (shares)</label>
+        <input type="number" id="s-amount" placeholder="3333">
+      </div>
+      <div class="field">
+        <label>Price / Share</label>
+        <input type="number" step="0.001" id="s-price" placeholder="0.00">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Profit ($)</label>
+        <input type="number" step="0.01" id="s-profit" placeholder="0.00">
+      </div>
+      <div class="field">
+        <label>Taxable ($)</label>
+        <input type="number" step="0.01" id="s-taxable" placeholder="0.00">
+      </div>
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="s-notes" placeholder="RSU's Vested (1/3 of Aug 2025 Grant)..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" data-close="soldOverlay">Cancel</button>
+      <button class="btn btn-primary" id="saveSoldBtn">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sell Modal -->
+<div class="overlay" id="sellOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Sell Holding</div>
+      <button class="close-x" data-close="sellOverlay">×</button>
+    </div>
+    <div class="field">
+      <label>Selling from</label>
+      <input type="text" id="sell-company-label" disabled style="opacity:0.7;">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Amount to Sell</label>
+        <input type="number" id="sell-amount" placeholder="10000">
+      </div>
+      <div class="field">
+        <label>Sale Price / Share</label>
+        <input type="number" step="0.001" id="sell-price" placeholder="0.00">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="sell-date">
+      </div>
+      <div class="field">
+        <label>Log As</label>
+        <select id="sell-type">
+          <option>Sale</option>
+          <option>Option Exercise</option>
+          <option>RSU Vest</option>
+          <option>Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Profit ($)</label>
+        <input type="number" step="0.01" id="sell-profit" placeholder="0.00">
+      </div>
+      <div class="field">
+        <label>Taxable ($)</label>
+        <input type="number" step="0.01" id="sell-taxable" placeholder="0.00">
+      </div>
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="sell-notes" placeholder="Optional"></textarea>
+    </div>
+    <div class="login-hint" id="sellWarning" style="text-align:left; color:var(--red); display:none;"></div>
+    <div class="modal-footer">
+      <button class="btn" data-close="sellOverlay">Cancel</button>
+      <button class="btn btn-primary" id="confirmSellBtn">Confirm Sale</button>
+    </div>
+  </div>
+</div>
+
+<!-- Buy More Modal -->
+<div class="overlay" id="buyMoreOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Buy More</div>
+      <button class="close-x" data-close="buyMoreOverlay">×</button>
+    </div>
+    <div class="field">
+      <label>Adding to</label>
+      <input type="text" id="buymore-company-label" disabled style="opacity:0.7;">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Amount to Buy</label>
+        <input type="number" id="buymore-amount" placeholder="10000">
+      </div>
+      <div class="field">
+        <label>Price / Share</label>
+        <input type="number" step="0.001" id="buymore-price" placeholder="0.00">
+      </div>
+    </div>
+    <div class="field">
+      <label>Purchase Date</label>
+      <input type="date" id="buymore-date">
+    </div>
+    <div class="login-hint" id="buymorePreview" style="text-align:left;"></div>
+    <div class="modal-footer">
+      <button class="btn" data-close="buyMoreOverlay">Cancel</button>
+      <button class="btn btn-primary" id="confirmBuyMoreBtn">Confirm Purchase</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   1. FIREBASE CONFIG — replace with your own project's config
+   Get this from: Firebase Console → Project Settings →
+   General → Your apps → Web app (</> icon)
+   ========================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyBYrMoY8n60oc3kz6Eqpuj7gPJPZRBOtqg",
+  authDomain: "quinn-finance-tracker.firebaseapp.com",
+  projectId: "quinn-finance-tracker",
+  storageBucket: "quinn-finance-tracker.firebasestorage.app",
+  messagingSenderId: "317055774119",
+  appId: "1:317055774119:web:31a79b6e4fbdd8e0d91a82"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+
+// ---------------- State ----------------
+let state = { holdings: [], sold: [], prices: {} };
+let editingHoldingId = null;
+let expandedIds = new Set();
+
+const AVATAR_PALETTE = ['#C9A24C','#4FAE7C','#7FA8D9','#C98FB0','#C4574B','#6FBFBF','#A99BD9','#D4915D'];
+function avatarColor(company){
+  let hash = 0;
+  for(let i=0;i<company.length;i++) hash = company.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+}
+function avatarInitials(company){
+  const words = company.trim().split(/\s+/).filter(Boolean);
+  if(words.length === 1) return words[0].slice(0,2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+function avatarHtml(company, small){
+  const cls = small ? 'avatar avatar-sm' : 'avatar';
+  const logo = state.logos && state.logos[company];
+  if(logo){
+    return `<img src="${logo}" class="${cls} avatar-img" alt="${escapeHtml(company)}">`;
+  }
+  return `<div class="${cls}" style="background:${avatarColor(company)};">${avatarInitials(company)}</div>`;
+}
+let editingSoldId = null;
+let editTranches = [];
+let currentUser = null;
+let unsubscribeDoc = null;
+
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  const sign = n < 0 ? '-' : '';
+  return sign + '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+};
+const fmtNum = (n) => (n === null || n === undefined || isNaN(n)) ? '—' : Number(n).toLocaleString('en-US');
+const todayISO = () => new Date().toISOString().slice(0,10);
+const fmtDate = (iso) => {
+  if(!iso) return '—';
+  const d = new Date(iso + 'T00:00:00');
+  if(isNaN(d)) return iso;
+  return d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+};
+
+function showToast(msg){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+// ---------------- Auth ----------------
+auth.onAuthStateChanged(user => {
+  if(user){
+    currentUser = user;
+    // Reset in-memory state before loading this account's data, so a brand-new
+    // account (no Firestore doc yet) never shows a previous session's data.
+    state = { holdings: [], sold: [], prices: {}, valueHistory: {}, logos: {} };
+    expandedIds = new Set();
+    holdingSearchTerm = '';
+    $('loginScreen').style.display = 'none';
+    subscribeToData();
+  } else {
+    currentUser = null;
+    if(unsubscribeDoc) unsubscribeDoc();
+    state = { holdings: [], sold: [], prices: {}, valueHistory: {}, logos: {} };
+    $('loginScreen').style.display = 'flex';
+    $('login-email').value = '';
+    $('login-password').value = '';
+  }
+});
+
+$('loginBtn').addEventListener('click', doLogin);
+$('login-password').addEventListener('keydown', (e) => { if(e.key === 'Enter') doLogin(); });
+
+async function doLogin(){
+  const email = $('login-email').value.trim();
+  const pass = $('login-password').value;
+  $('loginError').textContent = '';
+  if(!email || !pass){ $('loginError').textContent = 'Enter your email and password.'; return; }
+  try{
+    await auth.signInWithEmailAndPassword(email, pass);
+  }catch(e){
+    $('loginError').textContent = 'Sign in failed — check your email and password.';
+  }
+}
+
+$('signOutBtn').addEventListener('click', () => auth.signOut());
+
+// ---------------- Storage (Firestore, live sync) ----------------
+function subscribeToData(){
+  const docRef = db.collection('portfolios').doc(currentUser.uid);
+  unsubscribeDoc = docRef.onSnapshot(
+    (doc) => {
+      $('syncDot').classList.remove('off');
+      if(doc.exists){
+        const data = doc.data();
+        if(data.payload){
+          try{ state = JSON.parse(data.payload); }catch(e){ console.error('Bad payload', e); }
+        }
+      } else {
+        state = { holdings: [], sold: [], prices: {}, valueHistory: {}, logos: {} };
+      }
+      state.holdings = state.holdings || [];
+      state.sold = state.sold || [];
+      state.prices = state.prices || {};
+      state.valueHistory = state.valueHistory || {};
+      state.logos = state.logos || {};
+      render();
+    },
+    (err) => {
+      console.error('Sync error:', err);
+      $('syncDot').classList.add('off');
+      showToast('⚠ Sync error — check connection');
+    }
+  );
+}
+
+async function saveState(){
+  if(!currentUser) return;
+  try{
+    const totals = computeTotals();
+    if(totals.anyVal){
+      state.valueHistory = state.valueHistory || {};
+      state.valueHistory[todayISO()] = totals.totVal;
+    }
+    await db.collection('portfolios').doc(currentUser.uid).set({
+      payload: JSON.stringify(state),
+      updated: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }catch(e){
+    console.error('Save error:', e);
+    showToast('⚠ Save failed — check connection');
+  }
+}
+
+// ---------------- Derived calc ----------------
+function priceFor(company){
+  const p = state.prices[company];
+  return (p === undefined || p === null || p === '') ? null : Number(p);
+}
+
+function vestedAmount(h){
+  if(h.type === 'Shares') return Number(h.amount||0);
+  const t = todayISO();
+  return h.tranches.reduce((sum, tr) => tr.date && tr.date <= t ? sum + Number(tr.amount||0) : sum, 0);
+}
+
+function nextVestLabel(h){
+  if(h.type === 'Shares') return 'Fully owned';
+  const t = todayISO();
+  const upcoming = h.tranches.filter(tr => tr.date && tr.date > t).sort((a,b)=>a.date.localeCompare(b.date));
+  if(upcoming.length === 0) return h.tranches.length ? 'All Vested' : '—';
+  return fmtDate(upcoming[0].date);
+}
+
+function calcHolding(h){
+  const price = priceFor(h.company);
+  const vested = vestedAmount(h);
+  let profit = null, available = null;
+  if(price !== null){
+    if(h.type === 'Options' || h.type === 'Shares'){
+      const strike = Number(h.strike || 0);
+      profit = (price - strike) * Number(h.amount||0);
+      available = (price - strike) * vested;
+    } else {
+      profit = price * Number(h.amount||0);
+      available = price * vested;
+    }
+  }
+  return {price, vested, profit, available};
+}
+
+function computeTotals(){
+  let totVal = 0, totProfit = 0, totAvail = 0, anyVal = false;
+  state.holdings.forEach(h => {
+    const c = calcHolding(h);
+    if(c.price !== null){
+      anyVal = true;
+      totVal += c.price * Number(h.amount||0);
+      totProfit += c.profit || 0;
+      totAvail += c.available || 0;
+    }
+  });
+  return {totVal, totProfit, totAvail, anyVal};
+}
+
+// ---------------- Render ----------------
+let holdingSearchTerm = '';
+
+function render(){
+  $('asOfLine').textContent = 'As of ' + fmtDate(todayISO());
+
+  const {totVal, totProfit, totAvail, anyVal} = computeTotals();
+  $('totVal').textContent = anyVal ? fmt(totVal) : '—';
+  $('totProfit').textContent = anyVal ? fmt(totProfit) : '—';
+  $('totProfit').className = 'num ' + (totProfit >= 0 ? 'pos' : 'neg');
+  $('totAvail').textContent = anyVal ? fmt(totAvail) : '—';
+
+  renderChart();
+
+  $('holdingsCount').textContent = state.holdings.length + (state.holdings.length===1 ? ' holding' : ' holdings');
+  $('expandAllBtn').textContent = (expandedIds.size < state.holdings.length && state.holdings.length > 0) ? 'Expand all' : 'Collapse all';
+  const list = $('holdingsList');
+  const filtered = holdingSearchTerm
+    ? state.holdings.filter(h => h.company.toLowerCase().includes(holdingSearchTerm.toLowerCase()))
+    : state.holdings;
+  if(state.holdings.length === 0){
+    list.innerHTML = `<div class="empty"><b>No holdings yet</b>Add your first options or RSU grant to start tracking.</div>`;
+  } else if(filtered.length === 0){
+    list.innerHTML = `<div class="empty"><b>No matches</b>Nothing found for "${escapeHtml(holdingSearchTerm)}".</div>`;
+  } else {
+    list.innerHTML = filtered.map(h => renderHoldingCard(h)).join('');
+  }
+
+  $('soldCount').textContent = state.sold.length + (state.sold.length===1 ? ' entry' : ' entries');
+  const soldList = $('soldList');
+  if(state.sold.length === 0){
+    soldList.innerHTML = `<div class="empty"><b>Nothing logged yet</b>Vests and sales you record will show up here.</div>`;
+  } else {
+    const sorted = [...state.sold].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    soldList.innerHTML = sorted.map(s => renderSoldCard(s)).join('');
+  }
+
+  const companies = [...new Set(state.holdings.map(h=>h.company))].sort();
+  const priceList = $('priceList');
+  if(companies.length === 0){
+    priceList.innerHTML = `<div class="empty">Prices for your companies will appear here once you add a holding.</div>`;
+  } else {
+    priceList.innerHTML = companies.map(c => `
+      <div class="price-row">
+        <div class="pname">
+          <label class="avatar-upload-wrap" title="Click to set a logo for ${escapeHtml(c)}">
+            ${avatarHtml(c, true)}
+            <input type="file" accept="image/*" class="logo-upload" data-company="${escapeHtml(c)}" style="display:none;">
+          </label>
+          <span style="margin-left:10px;">${escapeHtml(c)}</span>
+        </div>
+        <div class="pval">$<input type="number" step="0.001" value="${state.prices[c] ?? ''}" data-company="${escapeHtml(c)}" class="price-input" placeholder="0.00"></div>
+      </div>
+    `).join('');
+    document.querySelectorAll('.price-input').forEach(inp => {
+      inp.addEventListener('change', async (e) => {
+        state.prices[e.target.dataset.company] = e.target.value;
+        await saveState();
+      });
+    });
+    document.querySelectorAll('.logo-upload').forEach(inp => {
+      inp.addEventListener('change', (e) => handleLogoUpload(e.target));
+    });
+  }
+
+  attachCardHandlers();
+}
+
+function handleLogoUpload(inputEl){
+  const file = inputEl.files && inputEl.files[0];
+  const company = inputEl.dataset.company;
+  if(!file || !company) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = async () => {
+      const size = 128;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const scale = Math.max(size / img.width, size / img.height);
+      const dw = img.width * scale, dh = img.height * scale;
+      ctx.drawImage(img, (size - dw) / 2, (size - dh) / 2, dw, dh);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      state.logos = state.logos || {};
+      state.logos[company] = dataUrl;
+      await saveState();
+      render();
+      showToast(`Logo set for ${company}`);
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderChart(){
+  const el = $('chartCard');
+  const history = state.valueHistory || {};
+  const points = Object.keys(history).sort().map(d => ({date: d, val: history[d]}));
+
+  if(points.length < 2){
+    el.innerHTML = `<div class="chart-empty">Keep updating prices and holdings — a value trend line will build up here over time.</div>`;
+    return;
+  }
+
+  const w = 600, h = 140, pad = 10;
+  const vals = points.map(p => p.val);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const range = (max - min) || 1;
+  const stepX = (w - pad*2) / (points.length - 1);
+
+  const coords = points.map((p, i) => {
+    const x = pad + i*stepX;
+    const y = pad + (h - pad*2) * (1 - (p.val - min) / range);
+    return [x, y];
+  });
+
+  const linePath = coords.map((c,i) => (i===0 ? 'M' : 'L') + c[0].toFixed(1) + ',' + c[1].toFixed(1)).join(' ');
+  const areaPath = linePath + ` L${coords[coords.length-1][0].toFixed(1)},${h-pad} L${coords[0][0].toFixed(1)},${h-pad} Z`;
+
+  const last = points[points.length-1].val;
+  const first = points[0].val;
+  const trendUp = last >= first;
+
+  el.innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="chartFade" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${trendUp ? '#4FAE7C' : '#C4574B'}" stop-opacity="0.25"/>
+          <stop offset="100%" stop-color="${trendUp ? '#4FAE7C' : '#C4574B'}" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path d="${areaPath}" fill="url(#chartFade)" stroke="none"/>
+      <path d="${linePath}" fill="none" stroke="${trendUp ? '#4FAE7C' : '#C4574B'}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>
+    <div class="chart-foot">
+      <span>${fmtDate(points[0].date)} · ${fmt(first)}</span>
+      <span>${fmtDate(points[points.length-1].date)} · ${fmt(last)}</span>
+    </div>
+  `;
+}
+
+function renderHoldingCard(h){
+  const c = calcHolding(h);
+  const isShares = h.type === 'Shares';
+
+  let vestingBlock = '';
+  if(!isShares){
+    const ticksHtml = h.tranches.length
+      ? h.tranches.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map(tr => {
+          const isVested = tr.date && tr.date <= todayISO();
+          return `<div class="tick ${isVested?'vested':''}"></div>`;
+        }).join('')
+      : '<div class="tick"></div>';
+    const chipsHtml = h.tranches.length
+      ? h.tranches.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map(tr => {
+          const isVested = tr.date && tr.date <= todayISO();
+          return `<span class="tranche-chip ${isVested?'vested':''}">${fmtNum(tr.amount)} · ${fmtDate(tr.date)}</span>`;
+        }).join('')
+      : '<span class="tranche-chip">No tranches set</span>';
+    vestingBlock = `
+    <div class="ladder-wrap">
+      <div class="ladder-label"><span>Vesting — ${fmtNum(c.vested)} / ${fmtNum(h.amount)} vested</span><span>Next: ${nextVestLabel(h)}</span></div>
+      <div class="ladder">${ticksHtml}</div>
+      <div class="tranche-list">${chipsHtml}</div>
+    </div>`;
+  }
+
+  const priceLabel = h.type==='Options' ? 'Strike' : (h.type==='Shares' ? (h.purchases && h.purchases.length > 1 ? 'Avg Cost' : 'Purchase Price') : 'Current Price');
+  const priceVal = h.type==='Options' || h.type==='Shares'
+    ? (h.strike ? '$'+Number(h.strike).toFixed(3) : '—')
+    : (c.price!==null ? '$'+c.price.toFixed(3) : '—');
+  const dateLabel = isShares ? 'Purchased' : 'Awarded';
+
+  let purchaseHistoryBlock = '';
+  if(isShares && h.purchases && h.purchases.length > 1){
+    const chips = h.purchases.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map(p =>
+      `<span class="tranche-chip">${fmtNum(p.amount)} @ $${Number(p.price).toFixed(3)} · ${fmtDate(p.date)}</span>`
+    ).join('');
+    purchaseHistoryBlock = `
+    <div class="ladder-wrap">
+      <div class="ladder-label"><span>Purchase History — ${h.purchases.length} buys</span></div>
+      <div class="tranche-list">${chips}</div>
+    </div>`;
+  }
+
+  let expiryFlag = '';
+  if(!isShares && h.expiry){
+    const days = Math.ceil((new Date(h.expiry+'T00:00:00') - new Date(todayISO()+'T00:00:00')) / 86400000);
+    if(days >= 0 && days <= 90){
+      const cls = days <= 30 ? 'soon' : 'upcoming';
+      const label = days === 0 ? 'Expires today' : `Expires in ${days}d`;
+      expiryFlag = `<span class="expiry-flag ${cls}">${label}</span>`;
+    }
+  }
+
+  return `
+  <div class="card" data-card-id="${h.id}">
+    <div class="card-summary" data-toggle-id="${h.id}">
+      ${avatarHtml(h.company)}
+      <div class="card-summary-mid">
+        <div class="card-summary-company">${escapeHtml(h.company)}${expiryFlag}</div>
+        <div class="card-summary-sub">${escapeHtml(h.type)} · ${fmtNum(h.amount)} sh${h.heldAt ? ' · ' + escapeHtml(h.heldAt) : ''}</div>
+      </div>
+      <div class="card-summary-right">
+        <div class="amt ${c.profit>=0?'pos':(c.profit<0?'neg':'')}">${c.profit!==null ? fmt(c.profit) : '—'}</div>
+      </div>
+      <div class="chevron ${expandedIds.has(h.id)?'open':''}">▶</div>
+    </div>
+    <div class="card-details" style="display:${expandedIds.has(h.id)?'block':'none'}">
+      <div class="card-actions" style="margin-bottom:12px;">
+        ${isShares ? `<button class="btn btn-ghost btn-sm buymore-holding" data-id="${h.id}">Buy More</button>` : ''}
+        <button class="btn btn-ghost btn-sm sell-holding" data-id="${h.id}">Sell</button>
+        <button class="btn btn-ghost btn-sm edit-holding" data-id="${h.id}">Edit</button>
+        <button class="btn btn-ghost btn-sm del-holding" data-id="${h.id}">Delete</button>
+      </div>
+      <div class="metrics-row">
+        <div class="metric"><div class="m-label">Amount</div><div class="m-val">${fmtNum(h.amount)}</div></div>
+        <div class="metric"><div class="m-label">${priceLabel}</div><div class="m-val">${priceVal}</div></div>
+        <div class="metric"><div class="m-label">Total Profit</div><div class="m-val ${c.profit>=0?'pos':(c.profit<0?'neg':'')}">${c.profit!==null ? fmt(c.profit) : 'Set price'}</div></div>
+        <div class="metric"><div class="m-label">${isShares?'Value':'Vested Value'}</div><div class="m-val ${c.available>=0?'pos':(c.available<0?'neg':'')}">${c.available!==null ? fmt(c.available) : '—'}</div></div>
+      </div>
+      ${vestingBlock}
+      ${purchaseHistoryBlock}
+      <div class="card-foot">
+        <span>${dateLabel}: <b>${h.awardedText || (h.awarded ? fmtDate(h.awarded) : '—')}</b></span>
+        ${isShares ? '' : `<span>Expiry: <b>${h.expiryText || (h.expiry ? fmtDate(h.expiry) : '—')}</b></span>`}
+        ${h.heldAt ? `<span>Held At: <b>${escapeHtml(h.heldAt)}</b></span>` : ''}
+      </div>
+      ${h.notes ? `<div class="card-notes">${escapeHtml(h.notes)}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderSoldCard(s){
+  const isAcquisition = ['Grant','Purchase','Buy'].includes(s.type);
+  const cost = Number(s.amount||0) * Number(s.price||0);
+  const rightVal = isAcquisition
+    ? `<div class="amt" style="color:var(--muted);">${fmt(cost)} cost</div>`
+    : `<div class="amt ${Number(s.profit)>=0?'pos':(Number(s.profit)<0?'neg':'')}">${fmt(Number(s.profit)||0)}</div>`;
+  const dirTag = isAcquisition
+    ? `<span class="expiry-flag upcoming" style="margin-left:8px;">+ Added</span>`
+    : `<span class="expiry-flag" style="margin-left:8px; background:rgba(79,174,124,0.15); color:var(--green); border:1px solid rgba(79,174,124,0.4);">− Disposed</span>`;
+  return `
+  <div class="sold-card">
+    <div class="sold-left">
+      <b>${escapeHtml(s.name)}</b>${dirTag}
+      <div class="sold-meta">${escapeHtml(s.type||'')} · ${fmtNum(s.amount)} sh @ $${Number(s.price||0).toFixed(3)} · ${fmtDate(s.date)}</div>
+      ${s.notes ? `<div class="sold-meta" style="margin-top:4px; color:var(--faint); font-style:italic;">${escapeHtml(s.notes)}</div>` : ''}
+    </div>
+    <div class="sold-right">
+      ${rightVal}
+      <div class="btn btn-ghost btn-sm edit-sold" data-id="${s.id}" style="display:inline-block; margin-top:4px;">Edit</div>
+      <div class="btn btn-ghost btn-sm del-sold" data-id="${s.id}" style="display:inline-block; margin-top:4px;">Del</div>
+    </div>
+  </div>`;
+}
+
+function escapeHtml(str){
+  if(str === null || str === undefined) return '';
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function attachCardHandlers(){
+  document.querySelectorAll('.card-summary').forEach(el => el.addEventListener('click', () => {
+    const id = el.dataset.toggleId;
+    if(expandedIds.has(id)) expandedIds.delete(id); else expandedIds.add(id);
+    render();
+  }));
+  document.querySelectorAll('.buymore-holding').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); openBuyMoreModal(b.dataset.id); }));
+  document.querySelectorAll('.sell-holding').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); openSellModal(b.dataset.id); }));
+  document.querySelectorAll('.edit-holding').forEach(b => b.addEventListener('click', () => openHoldingModal(b.dataset.id)));
+  document.querySelectorAll('.del-holding').forEach(b => b.addEventListener('click', async () => {
+    if(confirm('Delete this holding? This cannot be undone.')){
+      state.holdings = state.holdings.filter(h => h.id !== b.dataset.id);
+      await saveState(); showToast('Holding deleted');
+    }
+  }));
+  document.querySelectorAll('.edit-sold').forEach(b => b.addEventListener('click', () => openSoldModal(b.dataset.id)));
+  document.querySelectorAll('.del-sold').forEach(b => b.addEventListener('click', async () => {
+    if(confirm('Delete this entry?')){
+      state.sold = state.sold.filter(s => s.id !== b.dataset.id);
+      await saveState(); showToast('Entry deleted');
+    }
+  }));
+}
+
+// ---------------- Holding Modal ----------------
+function openHoldingModal(id){
+  editingHoldingId = id || null;
+  const h = id ? state.holdings.find(x=>x.id===id) : null;
+  $('holdingModalTitle').textContent = h ? 'Edit Holding' : 'Add Holding';
+  $('f-company').value = h ? h.company : '';
+  $('f-type').value = h ? h.type : 'Options';
+  $('f-amount').value = h ? h.amount : '';
+  $('f-strike').value = h ? (h.strike ?? '') : '';
+  $('f-awarded').value = h ? (h.awarded || '') : '';
+  $('f-awarded-text').value = h ? (h.awardedText || '') : '';
+  $('f-expiry').value = h ? (h.expiry || '') : '';
+  $('f-expiry-text').value = h ? (h.expiryText || '') : '';
+  $('f-heldat').value = h ? (h.heldAt || '') : '';
+  $('f-notes').value = h ? (h.notes || '') : '';
+  editTranches = h ? JSON.parse(JSON.stringify(h.tranches || [])) : [];
+  toggleStrikeRow();
+  renderTrancheEditor();
+  $('holdingOverlay').classList.add('open');
+}
+
+function toggleStrikeRow(){
+  const type = $('f-type').value;
+  if(type === 'RSU'){
+    $('priceFieldWrap').style.display = 'none';
+    $('dateFieldLabel').textContent = 'Awarded Date';
+    $('awardedTextLabel').textContent = 'Awarded (if unknown / n/a)';
+  } else if(type === 'Shares'){
+    $('priceFieldWrap').style.display = 'block';
+    $('priceFieldLabel').textContent = 'Purchase Price';
+    $('dateFieldLabel').textContent = 'Purchase Date';
+    $('awardedTextLabel').textContent = 'Purchase Date (if unknown / n/a)';
+  } else {
+    $('priceFieldWrap').style.display = 'block';
+    $('priceFieldLabel').textContent = 'Strike / Option Price';
+    $('dateFieldLabel').textContent = 'Awarded Date';
+    $('awardedTextLabel').textContent = 'Awarded (if unknown / n/a)';
+  }
+  $('trancheFieldWrap').style.display = type === 'Shares' ? 'none' : 'block';
+  $('expiryRow').style.display = type === 'Shares' ? 'none' : 'grid';
+}
+$('f-type').addEventListener('change', toggleStrikeRow);
+
+function renderTrancheEditor(){
+  const el = $('trancheEditor');
+  if(editTranches.length === 0){
+    el.innerHTML = `<div style="color:var(--faint); font-size:12px; padding:6px 2px;">No tranches added yet.</div>`;
+    return;
+  }
+  el.innerHTML = editTranches.map((tr, i) => `
+    <div class="tranche-editor-row">
+      <input type="number" placeholder="Amount" value="${tr.amount ?? ''}" data-idx="${i}" data-field="amount" class="tr-input">
+      <input type="date" value="${tr.date ?? ''}" data-idx="${i}" data-field="date" class="tr-input">
+      <button class="mini-x" data-idx="${i}" type="button">×</button>
+    </div>
+  `).join('');
+  el.querySelectorAll('.tr-input').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      const idx = Number(e.target.dataset.idx);
+      editTranches[idx][e.target.dataset.field] = e.target.value;
+    });
+  });
+  el.querySelectorAll('.mini-x').forEach(btn => {
+    btn.addEventListener('click', () => {
+      editTranches.splice(Number(btn.dataset.idx), 1);
+      renderTrancheEditor();
+    });
+  });
+}
+
+$('addTrancheBtn').addEventListener('click', () => {
+  editTranches.push({amount:'', date:''});
+  renderTrancheEditor();
+});
+
+$('addHoldingBtn').addEventListener('click', () => openHoldingModal(null));
+$('holdingSearch').addEventListener('input', (e) => {
+  holdingSearchTerm = e.target.value;
+  render();
+});
+$('expandAllBtn').addEventListener('click', () => {
+  if(expandedIds.size < state.holdings.length){
+    state.holdings.forEach(h => expandedIds.add(h.id));
+  } else {
+    expandedIds.clear();
+  }
+  render();
+});
+$('logSnapshotBtn').addEventListener('click', async () => {
+  const totals = computeTotals();
+  if(!totals.anyVal){
+    showToast('Set at least one current price first');
+    return;
+  }
+  state.valueHistory = state.valueHistory || {};
+  state.valueHistory[todayISO()] = totals.totVal;
+  await saveState();
+  render();
+  showToast(`Logged today's value — ${fmt(totals.totVal)}`);
+});
+
+$('saveHoldingBtn').addEventListener('click', async () => {
+  const company = $('f-company').value.trim();
+  if(!company){ showToast('Company name is required'); return; }
+  const amount = Number($('f-amount').value || 0);
+  if(!amount){ showToast('Amount is required'); return; }
+
+  const typeVal = $('f-type').value;
+  const cleanTranches = typeVal === 'Shares' ? [] : editTranches.filter(t => t.amount !== '' && t.amount !== null);
+
+  const record = {
+    id: editingHoldingId || ('h_' + Date.now()),
+    company,
+    type: typeVal,
+    amount,
+    strike: (typeVal === 'Options' || typeVal === 'Shares') ? Number($('f-strike').value || 0) : null,
+    awarded: $('f-awarded').value,
+    awardedText: $('f-awarded-text').value.trim(),
+    expiry: $('f-expiry').value,
+    expiryText: $('f-expiry-text').value.trim(),
+    heldAt: $('f-heldat').value.trim(),
+    notes: $('f-notes').value.trim(),
+    tranches: cleanTranches
+  };
+
+  if(editingHoldingId){
+    const existing = state.holdings.find(h => h.id === editingHoldingId);
+    if(existing && existing.purchases) record.purchases = existing.purchases;
+    const idx = state.holdings.findIndex(h => h.id === editingHoldingId);
+    state.holdings[idx] = record;
+  } else {
+    if(typeVal === 'Shares'){
+      record.purchases = [{amount: record.amount, price: record.strike, date: record.awarded || todayISO()}];
+    }
+    state.holdings.push(record);
+
+    // Auto-log the acquisition as a transaction
+    state.sold.push({
+      id: 's_' + Date.now(),
+      name: `${company} ${typeVal} Added`,
+      type: typeVal === 'Shares' ? 'Purchase' : 'Grant',
+      date: record.awarded || todayISO(),
+      amount: record.amount,
+      price: record.strike || 0,
+      profit: 0,
+      taxable: 0,
+      notes: 'Auto-logged when this holding was created'
+    });
+  }
+  await saveState();
+  closeOverlay('holdingOverlay');
+  showToast(editingHoldingId ? 'Holding updated' : 'Holding added');
+});
+
+// ---------------- Sold Modal ----------------
+function openSoldModal(id){
+  editingSoldId = id || null;
+  const s = id ? state.sold.find(x=>x.id===id) : null;
+  $('soldModalTitle').textContent = s ? 'Edit Transaction' : 'Log Transaction';
+  $('s-name').value = s ? s.name : '';
+  $('s-type').value = s ? s.type : 'RSU Vest';
+  $('s-date').value = s ? (s.date || todayISO()) : todayISO();
+  $('s-amount').value = s ? s.amount : '';
+  $('s-price').value = s ? s.price : '';
+  $('s-profit').value = s ? s.profit : '';
+  $('s-taxable').value = s ? s.taxable : '';
+  $('s-notes').value = s ? (s.notes || '') : '';
+  $('soldOverlay').classList.add('open');
+}
+
+$('addSoldBtn').addEventListener('click', () => openSoldModal(null));
+
+$('saveSoldBtn').addEventListener('click', async () => {
+  const name = $('s-name').value.trim();
+  if(!name){ showToast('Name is required'); return; }
+  const record = {
+    id: editingSoldId || ('s_' + Date.now()),
+    name,
+    type: $('s-type').value,
+    date: $('s-date').value || todayISO(),
+    amount: Number($('s-amount').value || 0),
+    price: Number($('s-price').value || 0),
+    profit: Number($('s-profit').value || 0),
+    taxable: Number($('s-taxable').value || 0),
+    notes: $('s-notes').value.trim()
+  };
+  if(editingSoldId){
+    const idx = state.sold.findIndex(s => s.id === editingSoldId);
+    state.sold[idx] = record;
+  } else {
+    state.sold.push(record);
+  }
+  await saveState();
+  closeOverlay('soldOverlay');
+  showToast(editingSoldId ? 'Entry updated' : 'Entry logged');
+});
+
+// ---------------- Sell Modal ----------------
+let sellingHoldingId = null;
+
+function openSellModal(id){
+  sellingHoldingId = id;
+  const h = state.holdings.find(x => x.id === id);
+  if(!h) return;
+  const c = calcHolding(h);
+  $('sell-company-label').value = `${h.company} — ${h.type} (${fmtNum(h.amount)} held, ${fmtNum(c.vested)} vested)`;
+  $('sell-amount').value = '';
+  $('sell-price').value = c.price !== null ? c.price : '';
+  $('sell-date').value = todayISO();
+  $('sell-type').value = h.type === 'RSU' ? 'RSU Vest' : (h.type === 'Options' ? 'Option Exercise' : 'Sale');
+  $('sell-profit').value = '';
+  $('sell-taxable').value = '';
+  $('sell-notes').value = '';
+  $('sellWarning').style.display = 'none';
+  $('sellOverlay').classList.add('open');
+  recalcSellProfit();
+}
+
+function recalcSellProfit(){
+  const h = state.holdings.find(x => x.id === sellingHoldingId);
+  if(!h) return;
+  const amount = Number($('sell-amount').value || 0);
+  const price = Number($('sell-price').value || 0);
+  let profit;
+  if(h.type === 'RSU'){
+    profit = price * amount;
+  } else {
+    profit = (price - Number(h.strike || 0)) * amount;
+  }
+  $('sell-profit').value = amount && price ? profit.toFixed(2) : '';
+}
+$('sell-amount').addEventListener('input', recalcSellProfit);
+$('sell-price').addEventListener('input', recalcSellProfit);
+
+$('confirmSellBtn').addEventListener('click', async () => {
+  const h = state.holdings.find(x => x.id === sellingHoldingId);
+  if(!h) return;
+  const sellAmount = Number($('sell-amount').value || 0);
+  if(!sellAmount || sellAmount <= 0){ showToast('Enter an amount to sell'); return; }
+  if(sellAmount > h.amount){ showToast("That's more than you hold"); return; }
+
+  const c = calcHolding(h);
+  if(sellAmount > c.vested){
+    $('sellWarning').style.display = 'block';
+    $('sellWarning').textContent = `Heads up — only ${fmtNum(c.vested)} of this holding is vested. Selling ${fmtNum(sellAmount)} will pull from unvested tranches too.`;
+  }
+
+  // Reduce the holding: consume tranches oldest-date first (vested first, then unvested)
+  h.amount = h.amount - sellAmount;
+  let remaining = sellAmount;
+  const sortedTranches = h.tranches.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const newTranches = [];
+  for(const tr of sortedTranches){
+    let trAmt = Number(tr.amount || 0);
+    if(remaining <= 0){
+      newTranches.push(tr);
+      continue;
+    }
+    if(trAmt <= remaining){
+      remaining -= trAmt;
+      // tranche fully consumed, drop it
+    } else {
+      newTranches.push({...tr, amount: trAmt - remaining});
+      remaining = 0;
+    }
+  }
+  h.tranches = newTranches;
+
+  // For Shares, also consume purchase history FIFO and recompute the weighted avg cost
+  if(h.type === 'Shares' && h.purchases && h.purchases.length){
+    let remainingP = sellAmount;
+    const sortedPurchases = h.purchases.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    const newPurchases = [];
+    for(const p of sortedPurchases){
+      let pAmt = Number(p.amount || 0);
+      if(remainingP <= 0){ newPurchases.push(p); continue; }
+      if(pAmt <= remainingP){
+        remainingP -= pAmt;
+      } else {
+        newPurchases.push({...p, amount: pAmt - remainingP});
+        remainingP = 0;
+      }
+    }
+    h.purchases = newPurchases;
+    if(h.purchases.length){
+      const totalCost = h.purchases.reduce((s,p)=>s + Number(p.amount)*Number(p.price), 0);
+      const totalAmt = h.purchases.reduce((s,p)=>s + Number(p.amount), 0);
+      h.strike = totalAmt ? totalCost / totalAmt : h.strike;
+    }
+  }
+
+  // Log the sale as its own record
+  const soldRecord = {
+    id: 's_' + Date.now(),
+    name: `${h.company} ${h.type} Sold`,
+    type: $('sell-type').value,
+    date: $('sell-date').value || todayISO(),
+    amount: sellAmount,
+    price: Number($('sell-price').value || 0),
+    profit: Number($('sell-profit').value || 0),
+    taxable: Number($('sell-taxable').value || 0),
+    notes: $('sell-notes').value.trim()
+  };
+  state.sold.push(soldRecord);
+
+  if(h.amount <= 0){
+    // fully sold out — keep the record but zero it rather than deleting, so history/notes aren't lost
+    h.amount = 0;
+    h.tranches = [];
+  }
+
+  await saveState();
+  closeOverlay('sellOverlay');
+  showToast(`Sold ${fmtNum(sellAmount)} — holding updated`);
+});
+
+// ---------------- Buy More Modal ----------------
+let buyingMoreHoldingId = null;
+
+function openBuyMoreModal(id){
+  buyingMoreHoldingId = id;
+  const h = state.holdings.find(x => x.id === id);
+  if(!h) return;
+  $('buymore-company-label').value = `${h.company} — currently ${fmtNum(h.amount)} @ $${Number(h.strike||0).toFixed(3)} avg`;
+  $('buymore-amount').value = '';
+  $('buymore-price').value = priceFor(h.company) !== null ? priceFor(h.company) : '';
+  $('buymore-date').value = todayISO();
+  $('buymorePreview').textContent = '';
+  $('buyMoreOverlay').classList.add('open');
+}
+
+function recalcBuyMorePreview(){
+  const h = state.holdings.find(x => x.id === buyingMoreHoldingId);
+  if(!h) return;
+  const addAmount = Number($('buymore-amount').value || 0);
+  const addPrice = Number($('buymore-price').value || 0);
+  if(!addAmount || !addPrice){ $('buymorePreview').textContent = ''; return; }
+  const existingPurchases = (h.purchases && h.purchases.length) ? h.purchases : [{amount: h.amount, price: h.strike||0, date: h.awarded||todayISO()}];
+  const totalCost = existingPurchases.reduce((s,p)=>s + Number(p.amount)*Number(p.price), 0) + addAmount*addPrice;
+  const totalAmount = existingPurchases.reduce((s,p)=>s + Number(p.amount), 0) + addAmount;
+  const newAvg = totalCost / totalAmount;
+  $('buymorePreview').textContent = `New position: ${fmtNum(totalAmount)} shares at a $${newAvg.toFixed(3)} weighted average cost.`;
+}
+$('buymore-amount').addEventListener('input', recalcBuyMorePreview);
+$('buymore-price').addEventListener('input', recalcBuyMorePreview);
+
+$('confirmBuyMoreBtn').addEventListener('click', async () => {
+  const h = state.holdings.find(x => x.id === buyingMoreHoldingId);
+  if(!h) return;
+  const addAmount = Number($('buymore-amount').value || 0);
+  const addPrice = Number($('buymore-price').value || 0);
+  const addDate = $('buymore-date').value || todayISO();
+  if(!addAmount || addAmount <= 0){ showToast('Enter an amount to buy'); return; }
+  if(!addPrice || addPrice < 0){ showToast('Enter a purchase price'); return; }
+
+  if(!h.purchases || h.purchases.length === 0){
+    h.purchases = [{amount: h.amount, price: h.strike || 0, date: h.awarded || todayISO()}];
+  }
+  h.purchases.push({amount: addAmount, price: addPrice, date: addDate});
+
+  const totalCost = h.purchases.reduce((s,p)=>s + Number(p.amount)*Number(p.price), 0);
+  const totalAmount = h.purchases.reduce((s,p)=>s + Number(p.amount), 0);
+  h.amount = totalAmount;
+  h.strike = totalCost / totalAmount;
+
+  state.sold.push({
+    id: 's_' + Date.now() + '_b',
+    name: `${h.company} Shares Bought`,
+    type: 'Buy',
+    date: addDate,
+    amount: addAmount,
+    price: addPrice,
+    profit: 0,
+    taxable: 0,
+    notes: 'Auto-logged from Buy More'
+  });
+
+  await saveState();
+  closeOverlay('buyMoreOverlay');
+  showToast(`Added ${fmtNum(addAmount)} — avg cost updated`);
+});
+
+// ---------------- Modal close ----------------
+function closeOverlay(id){ $(id).classList.remove('open'); }
+document.querySelectorAll('[data-close]').forEach(el => {
+  el.addEventListener('click', () => closeOverlay(el.dataset.close));
+});
+document.querySelectorAll('.overlay').forEach(ov => {
+  ov.addEventListener('click', (e) => { if(e.target === ov) closeOverlay(ov.id); });
+});
+</script>
+</body>
+</html>

@@ -512,6 +512,7 @@
   <div class="login-box">
     <button class="signout-btn" id="themeToggleBtnLogin" style="position:absolute; top:16px; right:16px;">☾ Dark</button>
     <img src="icon-192.png" alt="Vested" style="width:56px; height:56px; border-radius:14px; margin-bottom:14px;">
+    <div style="font-family:var(--font-display); font-size:26px; font-weight:600; letter-spacing:-0.01em; margin-bottom:4px;">Vested</div>
     <div class="login-eyebrow">Equity & Holdings Tracker</div>
     <div class="login-title" id="authTitle">Sign in</div>
     <div class="field">
@@ -583,6 +584,14 @@
     <span class="section-count" id="soldCount"></span>
   </div>
   <div id="soldList"></div>
+</section>
+
+<section>
+  <div class="section-head">
+    <div class="section-title">Taxable Income Summary</div>
+    <span class="section-count">RSU vests + 50% of option profit, by year</span>
+  </div>
+  <div id="taxSummaryList"></div>
 </section>
 
 <section>
@@ -875,6 +884,15 @@
     </div>
 
     <div class="field">
+      <label>Taxable Income Summary</label>
+      <div class="login-hint" style="text-align:left; margin-top:4px;">
+        Groups your logged <b>RSU Vest</b> and <b>Option Exercise</b> transactions by year, RSUs count
+        at full vested value, options at 50% of the profit. It's a working estimate built from what you've
+        logged, not a replacement for your actual tax slips.
+      </div>
+    </div>
+
+    <div class="field">
       <label>Reading a holding card</label>
       <div class="login-hint" style="text-align:left; margin-top:4px;">
         Cards are collapsed by default, tap one to expand it for full detail. A gold or red badge
@@ -914,6 +932,13 @@
     </div>
 
     <div class="login-hint" style="text-align:left; margin-bottom:16px;">Most recent changes first.</div>
+
+    <div class="field">
+      <label>Taxable Income Summary</label>
+      <div class="login-hint" style="text-align:left; margin-top:4px;">
+        Added a new section that totals RSU vest income and 50% of option exercise profit by year, a working estimate for tax season.
+      </div>
+    </div>
 
     <div class="field">
       <label>Branding</label>
@@ -1325,6 +1350,8 @@ function render(){
     soldList.innerHTML = sorted.map(s => renderSoldCard(s)).join('');
   }
 
+  renderTaxSummary();
+
   const companies = [...new Set(state.holdings.map(h=>h.company))].sort();
   const priceList = $('priceList');
   if(companies.length === 0){
@@ -1519,6 +1546,47 @@ function renderHoldingCard(h){
       </div>
       ${h.notes ? `<div class="card-notes">${escapeHtml(h.notes)}</div>` : ''}
     </div>
+  </div>`;
+}
+
+function renderTaxSummary(){
+  const el = $('taxSummaryList');
+  const years = {};
+  state.sold.forEach(s => {
+    if(!s.date) return;
+    const year = s.date.slice(0,4);
+    if(!years[year]) years[year] = { rsuIncome: 0, optionTaxable: 0, optionProfitRaw: 0 };
+    if(s.type === 'RSU Vest'){
+      years[year].rsuIncome += Number(s.amount||0) * Number(s.price||0);
+    } else if(s.type === 'Option Exercise'){
+      years[year].optionProfitRaw += Number(s.profit||0);
+      years[year].optionTaxable += Number(s.profit||0) * 0.5;
+    }
+  });
+
+  const yearKeys = Object.keys(years).sort().reverse();
+  if(yearKeys.length === 0){
+    el.innerHTML = `<div class="empty"><b>Nothing to summarize yet</b>Log an RSU vest or option exercise in Transaction History and it'll show up here by year.</div>`;
+    return;
+  }
+
+  el.innerHTML = yearKeys.map(year => {
+    const y = years[year];
+    const total = y.rsuIncome + y.optionTaxable;
+    return `
+    <div class="chart-card" style="margin-bottom:12px;">
+      <div style="font-family:var(--font-display); font-size:17px; font-weight:500; margin-bottom:12px;">${year}</div>
+      <div class="metrics-row" style="grid-template-columns:1fr 1fr; margin-bottom:0;">
+        <div class="metric"><div class="m-label">RSU Vested Income</div><div class="m-val">${fmt(y.rsuIncome)}</div></div>
+        <div class="metric"><div class="m-label">Option Profit (50%)</div><div class="m-val">${fmt(y.optionTaxable)}</div></div>
+      </div>
+      <div class="card-foot" style="margin-top:12px;">
+        <span>Full option profit: <b>${fmt(y.optionProfitRaw)}</b></span>
+        <span>Est. Taxable Income: <b style="color:var(--gold);">${fmt(total)}</b></span>
+      </div>
+    </div>`;
+  }).join('') + `<div class="login-hint" style="text-align:left; margin-top:4px;">
+    Working estimate only, based on your logged transactions, not a substitute for your actual tax slips.
   </div>`;
 }
 
